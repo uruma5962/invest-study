@@ -926,6 +926,127 @@ el("btnResolve").onclick = async () => {
   toast(before ? "最新の価格で答え合わせを更新しました" : "まだ予測がありません");
 };
 
+// ===== AI相談リスト：気になる銘柄の「事実」を集めて、まとめてコピー → AIに貼る =====
+// アプリは事実だけを出し、解釈（なぜ動いたか）はAI側に任せる。でっち上げを防ぐ設計。
+const AILIST_KEY = "invest_ailist";
+function loadAiList() { try { return JSON.parse(localStorage.getItem(AILIST_KEY) || "[]"); } catch { return []; } }
+function saveAiList(a) { try { localStorage.setItem(AILIST_KEY, JSON.stringify(a)); } catch {} }
+function aiListHas(t) { return loadAiList().includes(t); }
+function aiAddToggle(ticker) {
+  let a = loadAiList();
+  if (a.includes(ticker)) a = a.filter((x) => x !== ticker);
+  else { if (a.length >= 12) { toast("AI相談リストは最大12銘柄です", true); return; } a.push(ticker); }
+  saveAiList(a); renderAiList(); renderMAiAdd(ticker);
+}
+function renderMAiAdd(ticker) {
+  const box = el("mAiAdd"); if (!box) return;
+  const has = aiListHas(ticker);
+  box.innerHTML = `<button id="mAiAddBtn" class="${has ? "ghost" : ""}">${has ? "✓ AI相談リストに追加済み（外す）" : "＋ AI相談リストに追加"}</button>`;
+  el("mAiAddBtn").onclick = () => aiAddToggle(ticker);
+}
+function renderAiList() {
+  const box = el("aiListChips"); if (!box) return;
+  const a = loadAiList();
+  box.innerHTML = a.length
+    ? a.map((t) => `<button class="rchip" data-ailist="${t}" title="クリックで外す">${t} <b>×</b></button>`).join("")
+    : '<span class="note">まだありません。銘柄詳細を開いて「AI相談リストに追加」で集めます。</span>';
+  box.querySelectorAll("[data-ailist]").forEach((b) => { b.onclick = () => aiAddToggle(b.dataset.ailist); });
+}
+// 市場環境（VIX・米金利・ドル円）を実データから一言で
+function marketEnvLines(sym) {
+  const out = [], lm = lastMarket;
+  if (!lm || !lm.indices) return out;
+  const get = (t) => lm.indices.find((x) => x.ticker === t);
+  const vix = get("^VIX");
+  if (vix && vix.change_pct != null) out.push(`VIX ${vix.change_pct >= 0 ? "+" : ""}${vix.change_pct.toFixed(1)}%${vix.change_pct > 3 ? "（リスク回避寄り）" : vix.change_pct < -3 ? "（落ち着き）" : ""}`);
+  const tnx = get("^TNX");
+  if (tnx && tnx.change_pct != null && Math.abs(tnx.change_pct) >= 0.1) out.push(`米10年金利 ${tnx.change_pct >= 0 ? "+" : ""}${tnx.change_pct.toFixed(1)}%`);
+  if (sym.currency === "JPY") {
+    const jpy = get("JPY=X");
+    if (jpy && jpy.change_pct != null && Math.abs(jpy.change_pct) >= 0.1) out.push(`ドル円 ${jpy.change_pct >= 0 ? "+" : ""}${jpy.change_pct.toFixed(1)}%（${jpy.change_pct > 0 ? "円安方向" : "円高方向"}）`);
+  }
+  return out;
+}
+// 1銘柄の「事実シート」をテキストで作る（AIに渡す材料・でっち上げなし）
+async function buildFactSheet(ticker) {
+  if (!lastMarket) { try { await loadMarket(); } catch {} }  // 比較・市場環境に必要
+  const d = await api("/api/price/" + encodeURIComponent(ticker));
+  const sym = d.symbol || {}, q = d.quote || {};
+  const L = [`■ ${sym.name || ticker}（${ticker}）  ${q.date || ""}`];
+  if (q.change_pct != null) L.push(`・きょうの騰落: ${q.change_pct >= 0 ? "+" : ""}${q.change_pct.toFixed(2)}%（終値 ${money(q.close, sym.currency)}）`);
+  const p = moveParts(d);
+  if (p && p.idx != null) {
+    let s = `・比較: ${p.idxName} ${p.idx >= 0 ? "+" : ""}${p.idx.toFixed(2)}%`;
+    if (p.sec != null) s += `、同業種(${p.secName}・${p.secN}銘柄) ${p.sec >= 0 ? "+" : ""}${p.sec.toFixed(2)}%`;
+    L.push(s);
+    const resid = p.chg - p.idx;
+    L.push(`・指数との差: ${resid >= 0 ? "+" : ""}${resid.toFixed(2)}pt（＋＝相対的に強い／−＝弱い）`);
+  }
+  try {
+    const ind = await api("/api/indicators/" + encodeURIComponent(ticker));
+    if (ind && ind.close != null && ind.sma25) {
+      const dev = (ind.close - ind.sma25) / ind.sma25 * 100;
+      let t = `・行き過ぎ: 25日線から ${dev >= 0 ? "+" : ""}${dev.toFixed(1)}%`;
+      if (ind.rsi != null) { t += `、RSI ${ind.rsi.toFixed(0)}`; if (ind.rsi >= 70) t += "（買われすぎ圏）"; else if (ind.rsi <= 30) t += "（売られすぎ圏）"; }
+      L.push(t);
+    }
+  } catch {}
+  try {
+    const rel = await api("/api/relations/" + encodeURIComponent(ticker));
+    if (rel && rel.ok && rel.pos && rel.pos.length) {
+      const top = rel.pos.filter((x) => x.corr > 0).slice(0, 4).map((x) => `${x.name}(+${x.corr})`).join(", ");
+      if (top) L.push(`・よく一緒に動く: ${top}`);
+    }
+  } catch {}
+  const env = marketEnvLines(sym);
+  if (env.length) L.push("・市場環境: " + env.join(" / "));
+  try {
+    const nw = await api("/api/news/" + encodeURIComponent(ticker));
+    const items = (nw.items || []).slice(0, 5);
+    if (items.length) {
+      L.push("・この前後のニュース見出し（因果は未確認）:");
+      for (const n of items) {
+        const sj = ({ pos: "ポジ", neg: "ネガ", neu: "中立" })[n.sentiment] || "中立";
+        const dt = n.ts ? n.ts.slice(5, 16).replace("-", "/") : "";
+        L.push(`    [${sj}] ${(n.title || "").trim()}${n.publisher ? ` — ${n.publisher}` : ""}${dt ? `（${dt}）` : ""}`);
+      }
+    } else {
+      L.push("・ニュース: 目立った見出しなし（無料ニュースは薄め）");
+    }
+  } catch {}
+  return L.join("\n");
+}
+function legacyCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch {}
+  document.body.removeChild(ta); return ok;
+}
+async function copyAiBundle() {
+  const list = loadAiList();
+  if (!list.length) { toast("AI相談リストが空です。銘柄詳細で「追加」してください", true); return; }
+  const btn = el("btnAiCopy"); if (btn) { btn.disabled = true; btn.textContent = "まとめ作成中…"; }
+  const sheets = [];
+  for (const t of list) { try { sheets.push(await buildFactSheet(t)); } catch {} }
+  const header = [
+    "以下の銘柄について、「なぜ動いたのか（世間で言われていそうな要因・副次的な要因）」を、",
+    "下の“事実データとニュース見出し”だけをもとに、断定を避けて解説してください。",
+    "・推測は「推測」と明示し、根拠にした見出しを引用してください。",
+    "・事実にない原因は創作しないでください（見出しが薄い／無関係なら、その旨を書いてください）。",
+    `（${todayStr()} 時点・株価は遅延あり）`,
+    "=== 銘柄データ ===",
+  ].join("\n");
+  const text = header + "\n\n" + sheets.join("\n\n");
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch { ok = legacyCopy(text); }
+  if (btn) { btn.disabled = false; btn.textContent = "まとめてコピー"; }
+  toast(ok ? `${list.length}銘柄のまとめをコピーしました。AIに貼り付けてください` : "コピーできませんでした", !ok);
+}
+if (el("btnAiCopy")) el("btnAiCopy").onclick = copyAiBundle;
+if (el("btnAiClear")) el("btnAiClear").onclick = () => { saveAiList([]); renderAiList(); };
+renderAiList();
+
 // ---- モーダル（銘柄詳細） ----
 let chart = null, modalTicker = null, modalCurrency = "USD", modalMarker = null, modalRange = "6mo";
 let modalNews = [], newsMeta = {};
@@ -998,7 +1119,9 @@ async function openModal(ticker, opts = {}) {
       el("mPredictAI").dataset.prob = ind.probability;
     } catch { el("mIndicators").innerHTML = '<div class="note">指標はデータ不足で計算できません。</div>'; }
     // なぜ動いた？（AIの見立て）— 値動きの要因分解＋候補ニュース＋免責
+    if (!lastMarket) { try { await loadMarket(); } catch {} }  // 地合いデータを確保
     if (el("mWhy")) { try { el("mWhy").innerHTML = renderWhy(d, modalNews); } catch (e) { el("mWhy").innerHTML = ""; } }
+    renderMAiAdd(ticker);  // 「AI相談リストに追加」ボタン
     // 関係性（相対強弱・連動銘柄）
     el("mRelations").innerHTML = '<div class="note">関係性を計算中…</div>';
     try {
@@ -1561,7 +1684,7 @@ async function refresh() {
     if (currentTab === "market") await loadMarket();
     else if (currentTab === "ranking") await loadRanking();
     else if (currentTab === "trade") await loadTrade();
-    else if (currentTab === "ai") { renderRecent(); await loadPredictions(); await loadMLMetrics(); }
+    else if (currentTab === "ai") { renderRecent(); renderAiList(); await loadPredictions(); await loadMLMetrics(); }
     else if (currentTab === "settings") await loadSettings();
     bindRowClicks();
   } catch (e) { toast(e.message, true); }
