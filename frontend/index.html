@@ -12,12 +12,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=20261123a" />
+  <link rel="stylesheet" href="styles.css?v=20261125a" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js" defer></script>
-  <script src="about.js?v=20261123a" defer></script>
-  <script src="app.js?v=20261123a" defer></script>
+  <script src="about.js?v=20261125a" defer></script>
+  <script src="app.js?v=20261125a" defer></script>
 </head>
 <body>
   <header>
@@ -233,7 +233,8 @@
         <div class="note" style="margin-top:6px">期限（予測した日＋日数）を過ぎ、その先の株価が取得済みの予測を判定します。</div>
       </div>
 
-      <h2>予測の記録</h2>
+      <h2>予測の記録 <span class="note">（この端末のブラウザに保存・あなた専用）</span></h2>
+      <div class="note" style="margin:0 0 8px">予測はこの端末のブラウザに保存されるので、他の人とは混ざりません。期限が来ると、実際に上がった/下がったを自動で答え合わせします（価格データが進んだとき）。※ 別の端末やブラウザの消去では引き継がれません。</div>
       <div class="bet-bar">
         もし <input id="betAmt" type="number" value="100000" min="0" step="10000" /> 円を
         <b>予測どおりに賭けていたら</b>、いまの損益を各行に表示します

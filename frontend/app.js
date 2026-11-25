@@ -702,9 +702,9 @@ async function analyze(ticker) {
          <button id="recML" class="ghost" style="margin-left:10px">このモデル予測を記録</button>`;
       el("recML").onclick = async () => {
         try {
-          await post("/api/predict", { ticker, direction: m.direction, horizon_days: horizon,
+          await addPrediction({ ticker, direction: m.direction, horizon,
             probability: m.probability, source: "ML" });
-          toast("モデル予測を記録しました（ML）");
+          toast("モデル予測を記録しました（ML）・この端末に保存");
           loadPredictions();
         } catch (e) { toast(e.message, true); }
       };
@@ -766,23 +766,98 @@ function indicatorBlock(ind, ticker) {
     </div>
   </div>`;
 }
+// ===== 予測の記録：この端末のブラウザに保存（人ごと）＝ログイン不要・サーバー再起動でも消えない =====
+const PRED_KEY = "invest_preds";
+function loadPredStore() {
+  try { return JSON.parse(localStorage.getItem(PRED_KEY) || "[]"); } catch { return []; }
+}
+function savePredStore(arr) {
+  try { localStorage.setItem(PRED_KEY, JSON.stringify(arr)); } catch {}
+}
+function _pad2(x) { return String(x).padStart(2, "0"); }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`;
+}
+function addDaysStr(ds, n) {
+  const [y, m, d] = ds.split("-").map(Number);
+  const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() + n);
+  return `${dt.getFullYear()}-${_pad2(dt.getMonth() + 1)}-${_pad2(dt.getDate())}`;
+}
+function daysBetween(a, b) {   // b - a（日数）
+  const pa = a.split("-").map(Number), pb = b.split("-").map(Number);
+  return Math.round((new Date(pb[0], pb[1] - 1, pb[2]) - new Date(pa[0], pa[1] - 1, pa[2])) / 86400000);
+}
+// 予測を1件、ブラウザに記録する（基準値・基準日はその時の実データから取る）
+async function addPrediction({ ticker, direction, horizon, source, probability }) {
+  const d = await api("/api/price/" + encodeURIComponent(ticker));
+  const base = d.quote && d.quote.close, made = d.quote && d.quote.date;
+  if (base == null || !made) throw new Error("先に『更新』で株価データを取得してください");
+  const target = addDaysStr(made, Math.floor((horizon || 5) * 1.5) + 1);  // 営業日の概算
+  const preds = loadPredStore();
+  preds.push({
+    id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+    ticker, name: (d.symbol && d.symbol.name) || ticker,
+    direction, base_price: base, made_on: made, horizon_days: horizon || 5,
+    target_date: target, probability: (probability == null ? null : probability),
+    source, created_at: new Date().toISOString(),
+  });
+  savePredStore(preds);
+}
+function delPredLocal(id) {
+  savePredStore(loadPredStore().filter((p) => String(p.id) !== String(id)));
+  loadPredictions();
+}
+// 予測の一覧＋答え合わせ（上/下判定）を、ブラウザ保存ぶんから組み立てる
 async function loadPredictions() {
-  const d = await api("/api/predictions");
-  const a = d.accuracy;
+  const preds = loadPredStore().slice().sort((a, b) => (b.id || 0) - (a.id || 0)); // 新しい順
+  // 必要な価格データをティッカーごとに1回だけ取得（最大400日ぶん）
+  const tickers = [...new Set(preds.map((p) => p.ticker))];
+  const priceMap = {};
+  await Promise.all(tickers.map(async (tk) => {
+    try { priceMap[tk] = await api(`/api/price/${encodeURIComponent(tk)}?days=400`); }
+    catch { priceMap[tk] = null; }
+  }));
+  const today = todayStr();
+  const items = preds.map((p) => {
+    const o = { ...p };
+    const pd = priceMap[p.ticker];
+    const hist = (pd && pd.history) || [];
+    const latest = pd && pd.quote;
+    let resolved = false;
+    // 答え合わせ：target_date 当日以降で最初に存在する終値を実績とする
+    if (p.target_date <= today) {
+      const hit = hist.find((h) => h.date >= p.target_date && h.close != null);
+      if (hit) {
+        o.resolved = 1; o.actual_price = hit.close;
+        o.actual_dir = hit.close > p.base_price ? "up" : hit.close < p.base_price ? "down" : "flat";
+        o.correct = (o.actual_dir === p.direction) ? 1 : 0;
+        resolved = true;
+      }
+    }
+    if (!resolved && latest && latest.close != null) {
+      // 判定待ち：現時点で基準比±何%（途中経過）
+      o.cur_price = latest.close; o.cur_date = latest.date;
+      o.cur_pct = Math.round((latest.close - p.base_price) / p.base_price * 10000) / 100;
+      o.cur_dir = latest.close > p.base_price ? "up" : latest.close < p.base_price ? "down" : "flat";
+      o.on_track = (o.cur_dir === p.direction);
+      o.days_left = Math.max(daysBetween(today, p.target_date), 0);
+    }
+    return o;
+  });
+  // 的中率（答え合わせ済みのみ）
   el("accuracy").innerHTML = ["自分", "AI", "ML", "全体"].map((k) => {
-    const x = a[k];
-    const rate = x.rate == null ? "-" : x.rate.toFixed(0) + "%";
+    const sub = items.filter((x) => x.resolved && (k === "全体" || x.source === k));
+    const n = sub.length, hit = sub.filter((x) => x.correct).length;
+    const rate = n ? (hit / n * 100).toFixed(0) + "%" : "-";
     return `<div class="item"><div class="label">${k}</div><div class="big">${rate}</div>
-      <div class="note">${x.hit}/${x.n} 的中</div></div>`;
+      <div class="note">${hit}/${n} 的中</div></div>`;
   }).join("");
   const bet = betAmount();
-  el("predBody").innerHTML = d.items.map((p) => predRow(p, bet)).join("") ||
-    `<tr><td colspan="10" class="note">まだ予測はありません。</td></tr>`;
+  el("predBody").innerHTML = items.map((p) => predRow(p, bet)).join("") ||
+    `<tr><td colspan="10" class="note">まだ予測はありません（この端末のブラウザに保存されます）。</td></tr>`;
   document.querySelectorAll("[data-delpred]").forEach((b) => {
-    b.onclick = async () => {
-      try { await post("/api/predictions/delete", { id: Number(b.dataset.delpred) }); loadPredictions(); }
-      catch (e) { toast(e.message, true); }
-    };
+    b.onclick = () => delPredLocal(b.dataset.delpred);
   });
 }
 // 想定額（円）。ブラウザに記憶。
@@ -845,8 +920,10 @@ function predRow(p, bet) {
   };
 })();
 el("btnResolve").onclick = async () => {
-  try { const r = await post("/api/predict/resolve"); toast(`${r.resolved} 件を答え合わせしました`); await loadPredictions(); }
-  catch (e) { toast(e.message, true); }
+  // 答え合わせは一覧の読み込み時に自動で行う（最新の価格と照合）
+  const before = loadPredStore().length;
+  await loadPredictions();
+  toast(before ? "最新の価格で答え合わせを更新しました" : "まだ予測がありません");
 };
 
 // ---- モーダル（銘柄詳細） ----
@@ -1389,11 +1466,11 @@ el("mPredictSelf").onclick = () => recordPred("自分", null);
 el("mPredictAI").onclick = () => recordPred("AI", Number(el("mPredictAI").dataset.prob) || null);
 async function recordPred(source, prob) {
   try {
-    await post("/api/predict", {
+    await addPrediction({
       ticker: modalTicker, direction: el("mDir").value,
-      horizon_days: Number(el("mHorizon").value) || 5, probability: prob, source,
+      horizon: Number(el("mHorizon").value) || 5, probability: prob, source,
     });
-    toast(`予測を記録しました（${source}）`);
+    toast(`予測を記録しました（${source}）・この端末に保存`);
     if (currentTab === "ai") loadPredictions();
   } catch (e) { toast(e.message, true); }
 }
