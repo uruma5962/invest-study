@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>投資研究ソフト</title>
+  <!-- 保存済みテーマを描画前に適用（ちらつき防止） -->
+  <script>
+    try { var _t = localStorage.getItem("invest_theme") || "dark";
+      document.documentElement.setAttribute("data-theme", _t); } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="styles.css?v=20261123a" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js" defer></script>
+  <script src="about.js?v=20261123a" defer></script>
+  <script src="app.js?v=20261123a" defer></script>
+</head>
+<body>
+  <header>
+    <div class="brand">投資研究ソフト</div>
+    <span class="sub">仮想売買の練習 ・ 値動きは実データ</span>
+    <span class="spacer"></span>
+    <div class="head-actions">
+      <div class="theme-seg" id="themeSeg" title="表示テーマ">
+        <button data-theme="light">ライト</button>
+        <button data-theme="dark">ダーク</button>
+        <button data-theme="oled">暗め</button>
+      </div>
+      <span class="updated" id="updated">未更新</span>
+      <label class="live-toggle">
+        <input type="checkbox" id="chkLive" />
+        <span>自動更新</span>
+        <select id="liveInterval">
+          <option value="30">30秒</option>
+          <option value="60" selected>60秒</option>
+          <option value="180">3分</option>
+        </select>
+      </label>
+      <button class="primary" id="btnUpdate">更新</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="market" class="active">マーケット</button>
+    <button data-tab="ranking">ランキング</button>
+    <button data-tab="trade">仮想投資</button>
+    <button data-tab="ai">AI分析・予測</button>
+    <button data-tab="settings">設定</button>
+  </nav>
+
+  <main>
+    <!-- ============ マーケット ============ -->
+    <section class="view active" id="view-market">
+      <div class="mkt-summary" id="marketSummary"></div>
+
+      <h2>市場指数</h2>
+      <div class="tiles" id="indexTiles"></div>
+
+      <h2>値動きが大きい銘柄 <span class="note" id="moversNote"></span></h2>
+      <div class="note" style="margin:-4px 0 8px">
+        直近の<b>日次変動率のブレ（vol）</b>が大きい順。更新のたびに入れ替わり、動きが収まった銘柄は外れます。
+        <b>両方向</b>＝上下に振れている（平均回帰の練習向き）／<b>異常</b>＝一方向に飛ぶ・急変（ニュース等。普通の予測から外して見る）。
+      </div>
+      <div class="toolbar">
+        <div class="chips" id="moversFilter">
+          <button class="chip active" data-mv="">すべて</button>
+          <button class="chip" data-mv="normal">両方向のみ</button>
+          <button class="chip" data-mv="abn">異常のみ</button>
+        </div>
+      </div>
+      <div class="panel flush"><div class="tbl-wrap">
+        <table id="moversTable">
+          <thead><tr>
+            <th>銘柄</th><th>市場</th><th>現在値</th>
+            <th title="直近の日次変動率の標準偏差（1日あたりの平均的な振れ幅）">vol(日)</th>
+            <th title="集計期間の高値〜安値の幅">レンジ</th>
+            <th title="直近1日の騰落率">直近</th>
+            <th title="両方向＝上下に振れる／異常＝一方向・急変">タイプ</th>
+            <th>セクター</th>
+          </tr></thead>
+          <tbody id="moversBody"></tbody>
+        </table>
+      </div></div>
+
+      <h2>セクター騰落マップ <span class="note" id="sectorNote"></span></h2>
+      <div class="note" style="margin:-4px 0 8px">業種ごとの平均騰落率。全体の地合い（どの業種が買われ/売られているか）を一目で。クリックでその業種に絞り込み。</div>
+      <div class="sector-map" id="sectorMap"></div>
+
+      <h2>ウォッチリスト <span class="note" id="breadth"></span></h2>
+      <div class="toolbar">
+        <input class="search" id="wlSearch" placeholder="銘柄名・コードで検索" />
+        <div class="chips" id="wlMarket">
+          <button class="chip active" data-mk="">すべて</button>
+          <button class="chip" data-mk="JP">日本株</button>
+          <button class="chip" data-mk="US">米国株</button>
+        </div>
+        <div class="field" style="margin:0"><select id="wlSector" title="セクターで絞り込み"></select></div>
+      </div>
+      <div class="panel flush"><div class="tbl-wrap">
+        <table id="wlTable">
+          <thead><tr>
+            <th class="sortable" data-sort="name">銘柄 <span class="arrow"></span></th>
+            <th>市場</th>
+            <th class="sortable" data-sort="close">現在値 <span class="arrow"></span></th>
+            <th>前日比</th>
+            <th class="sortable" data-sort="change_pct">騰落率 <span class="arrow"></span></th>
+            <th>セクター</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="watchBody"></tbody>
+        </table>
+      </div></div>
+
+      <div class="panel">
+        <h2 style="margin-top:0">銘柄を追加</h2>
+        <div class="field" style="min-width:260px"><label>ティッカー（複数OK・カンマ/スペース区切り）</label>
+          <input id="addTicker" placeholder="例: AAPL, GOOGL, 6501.T" size="30" /></div>
+        <button id="btnAdd">追加して取得</button>
+        <div class="note" style="margin-top:6px">日本株は数字＋<b>.T</b>（例 6501.T）、米国株はそのまま（例 GOOGL）。追加するとウォッチリストに入り、株価も取得します。</div>
+        <div style="margin-top:14px">
+          <label>テーマでまとめて追加</label>
+          <div class="field"><select id="presetSelect"></select></div>
+          <button id="btnPreset">このテーマを追加</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="panel"><h2 style="margin-top:0">値上がり率 上位</h2>
+          <table><tbody id="gainers"></tbody></table></div>
+        <div class="panel"><h2 style="margin-top:0">値下がり率 上位</h2>
+          <table><tbody id="losers"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ============ ランキング ============ -->
+    <section class="view" id="view-ranking">
+      <h2>注目ランキング <span class="note">（ウォッチ銘柄が対象。「更新」で最新化）</span></h2>
+      <div class="row" id="rankCards"></div>
+
+      <h2>セクター別の上昇・下落</h2>
+      <div class="panel flush"><div class="tbl-wrap">
+        <table>
+          <thead><tr><th>セクター</th><th>平均騰落率</th><th>上昇/全体</th></tr></thead>
+          <tbody id="sectorBody"></tbody>
+        </table>
+      </div></div>
+
+      <h2>スクリーナー <span class="note">（条件でしぼり込み）</span></h2>
+      <div class="panel">
+        <div class="field"><label>RSI 下限</label><input id="scRsiMin" type="number" size="4" placeholder="0" /></div>
+        <div class="field"><label>RSI 上限</label><input id="scRsiMax" type="number" size="4" placeholder="100" /></div>
+        <div class="field"><label>騰落率 下限(%)</label><input id="scChgMin" type="number" size="4" placeholder="-100" /></div>
+        <div class="field"><label>サイン</label>
+          <select id="scSignal"><option value="">指定なし</option><option value="up">上がりそう</option><option value="down">下がりそう</option></select>
+        </div>
+        <button id="btnScreen">しぼり込み</button>
+      </div>
+      <div class="panel flush"><div class="tbl-wrap">
+        <table>
+          <thead><tr><th>銘柄</th><th>現在値</th><th>騰落率</th><th>RSI</th><th>出来高比</th><th>サイン</th><th>ML上昇%</th></tr></thead>
+          <tbody id="screenBody"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ============ 仮想投資 ============ -->
+    <section class="view" id="view-trade">
+      <div class="toolbar" style="justify-content:space-between">
+        <div class="note" id="marketStatus">市場ステータスを確認中…</div>
+        <button class="sm" id="btnRefreshHold">保有の最新値を取得</button>
+      </div>
+      <div class="row" id="portfolios"></div>
+
+      <div class="panel">
+        <h2 style="margin-top:0">資産推移 <span class="note">（取引・更新のたびに記録）</span></h2>
+        <div style="height:180px"><canvas id="equityChart"></canvas></div>
+        <div class="note" id="equityNote" style="margin-top:6px">まだ記録がありません。取引するか「更新」を押すと点が増えていきます。</div>
+      </div>
+
+      <div class="panel">
+        <h2 style="margin-top:0">注文（実データの直近終値で約定）</h2>
+        <div class="field"><label>銘柄</label><input id="trTicker" placeholder="7203.T / AAPL" size="12" /></div>
+        <div class="field"><label>売買</label>
+          <select id="trSide"><option value="buy">買う</option><option value="sell">売る</option></select>
+        </div>
+        <div class="field"><label>数量</label><input id="trQty" type="number" value="10" min="1" size="8" /></div>
+        <button class="primary" id="btnTrade" style="vertical-align:bottom">約定</button>
+        <span class="estimate" id="trEstimate"></span>
+        <div class="note" style="margin-top:8px">日本株は日本株口座(円)、米国株は米国株口座(ドル)に自動で振り分けます。手数料は設定タブで変更できます。</div>
+      </div>
+
+      <h2>取引履歴</h2>
+      <div class="panel flush"><div class="tbl-wrap">
+        <table>
+          <thead><tr><th>日時</th><th>銘柄</th><th>売買</th><th>数量</th><th>約定値</th><th>手数料</th><th>実現損益</th></tr></thead>
+          <tbody id="tradesBody"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ============ AI分析・予測 ============ -->
+    <section class="view" id="view-ai">
+      <div class="panel">
+        <h2 style="margin-top:0">銘柄を選んで指標を見る</h2>
+        <div class="field"><input id="aiTicker" placeholder="7203.T / AAPL" size="12" /></div>
+        <button id="btnAnalyze">分析</button>
+        <div id="aiRecent" class="recent"></div>
+        <div id="aiResult" style="margin-top:14px"></div>
+      </div>
+
+      <div class="panel">
+        <h2 style="margin-top:0">AIモデル（機械学習・scikit-learn）</h2>
+        <div class="field"><label>予測期間</label>
+          <select id="mlHorizon">
+            <option value="5" selected>5営業日先</option>
+            <option value="10">10営業日先</option>
+            <option value="20">20営業日先</option>
+          </select>
+        </div>
+        <button id="btnTrainML">モデルを学習</button>
+        <div id="mlMetrics" class="note" style="margin-top:10px">まだ学習していません。</div>
+        <div class="warn" style="margin-top:6px">※ 日足＋単純な指標だけの簡易モデルです。的中率は50%前後が普通で、当たる保証はありません。「当て勘（多数派）ベースライン」を超えているかで実力を見ます。学習データへの過学習にも注意。</div>
+      </div>
+
+      <div class="panel">
+        <h2 style="margin-top:0">予測の的中率 <span class="note">（答え合わせ済みのみ）</span></h2>
+        <div class="kpi" id="accuracy"></div>
+        <button class="ghost" id="btnResolve" style="margin-top:10px">答え合わせを進める</button>
+        <div class="note" style="margin-top:6px">期限（予測した日＋日数）を過ぎ、その先の株価が取得済みの予測を判定します。</div>
+      </div>
+
+      <h2>予測の記録</h2>
+      <div class="bet-bar">
+        もし <input id="betAmt" type="number" value="100000" min="0" step="10000" /> 円を
+        <b>予測どおりに賭けていたら</b>、いまの損益を各行に表示します
+        <span class="note">（下がる予測は「下がる方に賭けた」として計算。手数料は含みません）</span>
+      </div>
+      <div class="panel flush"><div class="tbl-wrap">
+        <table>
+          <thead><tr><th>予測日</th><th>銘柄</th><th>方向</th><th>確率</th><th>出所</th><th>基準値</th><th>想定損益</th><th>結果</th><th>的中</th><th></th></tr></thead>
+          <tbody id="predBody"></tbody>
+        </table>
+      </div></div>
+    </section>
+
+    <!-- ============ 設定 ============ -->
+    <section class="view" id="view-settings">
+      <div class="panel">
+        <h2 style="margin-top:0">使い方（目的）</h2>
+        <div class="chips" id="modeChips">
+          <button class="chip" data-mode="short">短期（スイング）</button>
+          <button class="chip" data-mode="long">長期（じっくり）</button>
+        </div>
+        <div class="note" id="modeDesc" style="margin-top:8px"></div>
+        <div class="note" style="margin-top:6px">※ 目的を変えると、銘柄チャートの<b>最初に出る期間</b>と<b>予測の既定日数</b>が変わります。期間ボタンでいつでも切り替えられます。</div>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0">取引設定</h2>
+        <div class="field"><label>手数料率(%)</label><input id="setFee" type="number" step="0.01" min="0" max="5" size="6" /></div>
+        <button id="btnSaveSettings">保存</button>
+        <div class="note" style="margin-top:6px">約定ごとに「約定代金 × 手数料率」を差し引きます（0なら手数料なし）。現実に近づけたいとき用。</div>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0">表示の記憶</h2>
+        <div class="note">自動更新のオン/オフと間隔、最後に開いていたタブは、この端末のブラウザに自動で記憶され、次回も引き継がれます。</div>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0">練習をやり直す</h2>
+        <button id="btnReset" style="border-color:var(--down);color:var(--down)">取引・保有・予測をすべて消して初期化</button>
+        <div class="warn" style="margin-top:6px">口座の現金を初期額（日本株 ¥10万 / 米国株 $700）に戻し、取引履歴・保有・予測をすべて削除します。取得済みの株価データは残ります。</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 銘柄詳細モーダル -->
+  <div class="modal-bg" id="modalBg">
+    <div class="modal">
+      <div class="modal-head">
+        <div><h3 id="mTitle"></h3><div class="note" id="mSub"></div></div>
+        <span class="spacer"></span>
+        <button class="ghost" id="mClose">閉じる</button>
+      </div>
+      <div class="about-box" id="mAbout"></div>
+      <div class="chart-ranges" id="mRanges">
+        <button data-range="1d">1日</button>
+        <button data-range="5d">5日</button>
+        <button data-range="1mo">1ヶ月</button>
+        <button data-range="3mo">3ヶ月</button>
+        <button data-range="6mo" class="active">6ヶ月</button>
+        <button data-range="1y">1年</button>
+        <button data-range="5y">5年</button>
+        <button data-range="max">全期間</button>
+      </div>
+      <div class="overlay-row" id="mOverlayRow">
+        <label class="overlay-toggle" id="mOverlayWrap" title="対応する株価指数（日本株=日経平均 / 米国株=S&P500）を同じ期間で重ね、連動しているかを見る">
+          <input type="checkbox" id="mOverlay" /> <span id="mOverlayLabel">指数を重ねる</span>
+        </label>
+        <span class="note overlay-hint">チェックすると、市場の指数（日経平均/S&P500）を破線で重ね、この銘柄が指数と連動して動いているかを見られます。</span>
+      </div>
+      <div style="margin:4px 0 4px; height:240px"><canvas id="mChart"></canvas></div>
+      <div class="zoom-hint" id="mZoomHint">
+        <span>グラフ上で<b>ホイールを回すと拡大・縮小</b>（月日が細かく／広く）、<b>ドラッグで左右</b>に動かすと期間の位置をずらせます。</span>
+        <button class="zoom-reset" id="mZoomReset" type="button">表示をリセット</button>
+      </div>
+      <div id="mIndicators"></div>
+      <div id="mWhy" class="why-box"></div>
+      <div id="mSeason" style="margin-top:12px"></div>
+      <div id="mRelations" style="margin-top:12px"></div>
+      <div id="mNews" style="margin-top:12px"></div>
+      <div class="panel" style="margin-top:12px">
+        <h2 style="margin-top:0">この銘柄で操作</h2>
+        <div class="field"><label>数量</label><input id="mQty" type="number" value="10" min="1" size="6" /></div>
+        <button id="mBuy">買う</button>
+        <button id="mSell">売る</button>
+        <span style="margin:0 10px">|</span>
+        <div class="field"><label>予測</label>
+          <select id="mDir"><option value="up">上がる</option><option value="down">下がる</option></select>
+        </div>
+        <div class="field"><label>期間(営業日)</label><input id="mHorizon" type="number" value="5" min="1" size="4" /></div>
+        <button id="mPredictSelf">自分の予測を記録</button>
+        <button id="mPredictAI" class="ghost">AIサインを採用</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</body>
+</html>

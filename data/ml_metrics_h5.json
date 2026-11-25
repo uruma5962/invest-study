@@ -1,0 +1,1 @@
+{"horizon": 5, "n": 1680, "test_accuracy": 0.5267857142857143, "baseline": 0.5029761904761905, "up_ratio": 0.544047619047619, "top_features": [{"name": "sma25_75", "importance": 0.111}, {"name": "rsi", "importance": 0.103}, {"name": "ret10", "importance": 0.085}, {"name": "vol20", "importance": 0.084}, {"name": "ret20", "importance": 0.083}]}

@@ -1,0 +1,10 @@
+# Render（https://render.com）のブループリント。
+# GitHub リポジトリを連携 → この設定で Docker の Web サービスが作られる。
+# ※ うまく読まれない場合は、Render 画面で手動で「Docker」サービスを作ってもOK。
+services:
+  - type: web
+    name: invest-study
+    runtime: docker
+    plan: free
+    region: singapore
+    autoDeploy: true

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# SQLite の作業ファイル（本体 data/invest.db は同梱したいので無視しない）
+*.db-wal
+*.db-shm
+
+# 学習済みモデル（起動後に作り直せる）
+backend/models/
+
+*.log
+
+# セッション用のローカル設定
+.claude/
