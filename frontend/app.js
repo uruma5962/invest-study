@@ -1049,7 +1049,7 @@ renderAiList();
 
 // ---- モーダル（銘柄詳細） ----
 let chart = null, modalTicker = null, modalCurrency = "USD", modalMarker = null, modalRange = "6mo";
-let modalNews = [], newsMeta = {};
+let modalNews = [], newsMeta = {}, predMeta = {};
 function fmtCur(v) { return money(v, modalCurrency); }
 function sentColor(s) { return ({ pos: "#30d158", neg: "#ff5a5f", neu: "#8a94a6" })[s] || "#8a94a6"; }
 function sentJa(s) { return ({ pos: "ポジ", neg: "ネガ", neu: "中立" })[s] || "中立"; }
@@ -1400,6 +1400,7 @@ function drawChart(series, opts = {}) {
   const cGrid = (_cs.getPropertyValue("--border").trim() || "#272e3b") + "66";
   const cLine = _cs.getPropertyValue("--accent").trim() || "#4c8dff";
   newsMeta = {};
+  predMeta = {};
   const labels = series.map((s) => s.t);
   const closes = series.map((s) => s.close);
   const baseLen = labels.length;
@@ -1477,6 +1478,36 @@ function drawChart(series, opts = {}) {
     }
   }
 
+  // 予測の印（この端末に保存した「この時こう予測した」を、作った日の位置に◆で置く）
+  try {
+    const myPreds = loadPredStore().filter((p) => p.ticker === modalTicker && p.made_on);
+    if (myPreds.length) {
+      const pdata = new Array(allLabels.length).fill(null);
+      myPreds.forEach((p) => {
+        const i = snap(p.made_on);
+        if (i < 0 || i >= baseLen) return;        // 表示期間の外なら置かない
+        pdata[i] = closes[i];
+        (predMeta[i] = predMeta[i] || []).push(p);
+      });
+      const pidx = Object.keys(predMeta).map(Number);
+      if (pidx.length) {
+        // 同じ点に複数あるときは「上げ予測があれば緑・下げだけなら赤・混在は上げ色」
+        const pcolors = new Array(allLabels.length).fill("#8a94a6");
+        pidx.forEach((i) => {
+          const ps = predMeta[i];
+          pcolors[i] = ps.some((p) => p.direction === "up") ? "#30d158"
+            : ps.some((p) => p.direction === "down") ? "#ff5a5f" : "#8a94a6";
+        });
+        datasets.push({
+          label: "予測", data: pdata, pointStyle: "rectRot", rotation: 0,
+          pointRadius: 8, pointHoverRadius: 11,
+          pointBackgroundColor: pcolors, pointBorderColor: "#ffffff", pointBorderWidth: 1.5,
+          showLine: false, spanGaps: false,
+        });
+      }
+    }
+  } catch {}
+
   // 約定の印（取引履歴から開いたとき）
   if (opts.marker) {
     const i = snap(opts.marker.t);
@@ -1540,6 +1571,16 @@ function drawChart(series, opts = {}) {
                   return `${sentJa(m.sentiment)} ${hm}${(m.title || "").slice(0, 42)}`;
                 });
               }
+              if (lbl === "予測") {
+                const ps = predMeta[item.dataIndex] || [];
+                return ps.map((p) => {
+                  const dir = p.direction === "up" ? "上がる予測" : p.direction === "down" ? "下がる予測" : "横ばい予測";
+                  const who = p.source === "AI" ? "AI" : p.source === "自分" ? "自分" : (p.source || "予測");
+                  const prob = (p.probability != null) ? `・上昇確率${Math.round(p.probability)}%` : "";
+                  const hz = p.horizon_days ? `・${p.horizon_days}日想定` : "";
+                  return `🔮 ${who}：${dir}${hz}${prob}`;
+                });
+              }
               if (lbl && lbl.startsWith("この傾き")) return "予測の目安（直近の傾きを延長・断定ではありません）";
               if (item.parsed.y == null) return null;
               if (lbl && lbl.includes("指数")) return `${lbl.replace("（指数・右軸）", "")} ${num(item.parsed.y, 2)}`;
@@ -1594,6 +1635,8 @@ async function recordPred(source, prob) {
       horizon: Number(el("mHorizon").value) || 5, probability: prob, source,
     });
     toast(`予測を記録しました（${source}）・この端末に保存`);
+    // 記録した予測を、いま開いているグラフにも即座に◆で反映する
+    try { if (lastChartArgs) drawChart(lastChartArgs.series, lastChartArgs.opts); } catch {}
     if (currentTab === "ai") loadPredictions();
   } catch (e) { toast(e.message, true); }
 }
