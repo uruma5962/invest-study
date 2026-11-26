@@ -236,9 +236,25 @@ label { color: var(--muted); font-size: 11.5px; display: block; margin-bottom: 4
 .modal-bg.show { display: flex; }
 .modal {
   background: var(--panel); border: 1px solid var(--border2); border-radius: 16px;
-  width: 100%; max-width: 740px; max-height: 92vh; overflow: auto; padding: 22px; box-shadow: var(--shadow);
+  width: 100%; max-width: 1180px; max-height: 92vh; overflow: auto; padding: 22px; box-shadow: var(--shadow);
 }
 .modal h3 { margin: 0 0 2px; font-size: 19px; }
+/* 詳細モーダルの本体：広い画面では左右2カラム（右に「操作」を固定表示） */
+.modal-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.modal-main { min-width: 0; }
+.modal-side { min-width: 0; }
+.modal-side .op-panel { position: sticky; top: 0; }
+.op-panel .op-group { padding: 10px 0; border-top: 1px solid var(--border); }
+.op-panel .op-group:first-of-type { border-top: 0; padding-top: 4px; }
+.op-panel .op-label { color: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; margin-bottom: 8px; }
+.op-panel .op-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.op-panel .op-btns button { flex: 1 1 auto; min-width: 120px; }
+.op-panel .field { margin: 6px 0; }
+/* 狭い画面では1カラムに戻す（操作は一番下だが、縦積みで見やすく） */
+@media (max-width: 860px) {
+  .modal-body { grid-template-columns: 1fr; gap: 12px; }
+  .modal-side .op-panel { position: static; }
+}
 .modal-head { display: flex; align-items: flex-start; }
 .modal-head .spacer { flex: 1; }
 /* 最近見た銘柄チップ */

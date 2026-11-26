@@ -12,12 +12,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=20261126d" />
+  <link rel="stylesheet" href="styles.css?v=20261126e" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js" defer></script>
-  <script src="about.js?v=20261126d" defer></script>
-  <script src="app.js?v=20261126d" defer></script>
+  <script src="about.js?v=20261126e" defer></script>
+  <script src="app.js?v=20261126e" defer></script>
 </head>
 <body>
   <header>
@@ -296,6 +296,8 @@
         <button class="ghost" id="mClose">閉じる</button>
       </div>
       <div class="about-box" id="mAbout"></div>
+      <div class="modal-body">
+       <div class="modal-main">
       <div class="chart-ranges" id="mRanges">
         <button data-range="1d">1日</button>
         <button data-range="5d">5日</button>
@@ -323,19 +325,32 @@
       <div id="mSeason" style="margin-top:12px"></div>
       <div id="mRelations" style="margin-top:12px"></div>
       <div id="mNews" style="margin-top:12px"></div>
-      <div class="panel" style="margin-top:12px">
-        <h2 style="margin-top:0">この銘柄で操作</h2>
-        <div class="field"><label>数量</label><input id="mQty" type="number" value="10" min="1" size="6" /></div>
-        <button id="mBuy">買う</button>
-        <button id="mSell">売る</button>
-        <span style="margin:0 10px">|</span>
-        <div class="field"><label>予測</label>
-          <select id="mDir"><option value="up">上がる</option><option value="down">下がる</option></select>
+       </div><!-- /.modal-main -->
+       <aside class="modal-side">
+        <div class="panel op-panel">
+          <h2 style="margin-top:0">この銘柄で操作</h2>
+          <div class="op-group">
+            <div class="op-label">売買（仮想）</div>
+            <div class="field"><label>数量</label><input id="mQty" type="number" value="10" min="1" size="6" /></div>
+            <div class="op-btns">
+              <button id="mBuy">買う</button>
+              <button id="mSell">売る</button>
+            </div>
+          </div>
+          <div class="op-group">
+            <div class="op-label">予測を記録</div>
+            <div class="field"><label>向き</label>
+              <select id="mDir"><option value="up">上がる</option><option value="down">下がる</option></select>
+            </div>
+            <div class="field"><label>期間(営業日)</label><input id="mHorizon" type="number" value="5" min="1" size="4" /></div>
+            <div class="op-btns">
+              <button id="mPredictSelf">自分の予測を記録</button>
+              <button id="mPredictAI" class="ghost">AIサインを採用</button>
+            </div>
+          </div>
         </div>
-        <div class="field"><label>期間(営業日)</label><input id="mHorizon" type="number" value="5" min="1" size="4" /></div>
-        <button id="mPredictSelf">自分の予測を記録</button>
-        <button id="mPredictAI" class="ghost">AIサインを採用</button>
-      </div>
+       </aside>
+      </div><!-- /.modal-body -->
     </div>
   </div>
 
