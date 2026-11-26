@@ -843,6 +843,7 @@ async function loadPredictions() {
       o.on_track = (o.cur_dir === p.direction);
       o.days_left = Math.max(daysBetween(today, p.target_date), 0);
     }
+    o.sparkHtml = predSpark(o, hist);
     return o;
   });
   // 的中率（答え合わせ済みのみ）
@@ -858,6 +859,41 @@ async function loadPredictions() {
     `<tr><td colspan="10" class="note">まだ予測はありません（この端末のブラウザに保存されます）。</td></tr>`;
   document.querySelectorAll("[data-delpred]").forEach((b) => {
     b.onclick = () => delPredLocal(b.dataset.delpred);
+  });
+  bindSparkHovers();
+}
+// 予測の記録：銘柄セルにホバーしたら、ミニチャートを浮かせて表示する
+// （表は横スクロール枠で見切れるため、body直下に position:fixed で出す）
+function sparkFloat() {
+  let f = el("sparkFloat");
+  if (!f) {
+    f = document.createElement("div");
+    f.id = "sparkFloat"; f.className = "spark-float";
+    document.body.appendChild(f);
+  }
+  return f;
+}
+function bindSparkHovers() {
+  const f = sparkFloat();
+  const hide = () => { f.classList.remove("show"); };
+  document.querySelectorAll(".spark-cell.has-spark").forEach((cell) => {
+    const pop = cell.querySelector(".spark-pop");
+    if (!pop) return;
+    const show = () => {
+      f.innerHTML = pop.innerHTML;
+      f.classList.add("show");
+      const r = cell.getBoundingClientRect();
+      const fw = f.offsetWidth || 280, fh = f.offsetHeight || 110, gap = 8;
+      let left = r.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - fw - 8));
+      // 基本は上に出す。上に入らなければ下へ。
+      let top = r.top - fh - gap;
+      if (top < 8) top = r.bottom + gap;
+      f.style.left = left + "px";
+      f.style.top = top + "px";
+    };
+    cell.onmouseenter = show;
+    cell.onmouseleave = hide;
   });
 }
 // 想定額（円）。ブラウザに記憶。
@@ -877,6 +913,53 @@ function predPL(p, bet) {
   const s = yen > 0 ? "+" : "";
   const live = p.resolved ? "" : '<span class="note">（途中）</span>';
   return `<span class="pl-amt ${cls}">${s}${yen.toLocaleString()}円</span>${live}`;
+}
+// 予測の記録用ミニチャート（ホバーで出す）。「どこで予測して、今ここ」を一目で。
+function predSpark(p, hist) {
+  const all = (hist || []).filter((h) => h.close != null);
+  if (all.length < 2) return "";
+  // 予測した日の位置を探し、その少し手前から今までを描く
+  let mi = all.findIndex((h) => h.date >= p.made_on);
+  const start = mi < 0 ? Math.max(0, all.length - 40) : Math.max(0, mi - 6);
+  const w = all.slice(start);
+  if (w.length < 2) return "";
+  const predIdx = mi < 0 ? 0 : (mi - start);
+  const W = 260, H = 84, PAD = 10, n = w.length;
+  const closes = w.map((h) => h.close);
+  const vals = closes.concat([p.base_price]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const X = (i) => PAD + (W - 2 * PAD) * (n <= 1 ? 0 : i / (n - 1));
+  const Y = (v) => PAD + (H - 2 * PAD) * (1 - (v - lo) / (hi - lo));
+  const pts = w.map((h, i) => `${X(i).toFixed(1)},${Y(h.close).toFixed(1)}`).join(" ");
+  const xPred = X(predIdx), yBase = Y(p.base_price);
+  const endV = closes[n - 1], xEnd = X(n - 1), yEnd = Y(endV);
+  const endUp = endV > p.base_price, endDown = endV < p.base_price;
+  const endColor = endUp ? "#30d158" : endDown ? "#ff5a5f" : "#8a94a6";
+  const predColor = p.direction === "up" ? "#30d158" : "#ff5a5f";
+  // キャプション（予測→現在／判定）
+  const dirJa = p.direction === "up" ? "上がる予測" : "下がる予測";
+  let right;
+  if (p.resolved) {
+    const ad = { up: "上", down: "下", flat: "±0" }[p.actual_dir] || "-";
+    const mark = p.correct ? "○的中" : "×はずれ";
+    right = `判定 ${num(p.actual_price, 2)}（${ad}・${mark}）`;
+  } else {
+    const s = (p.cur_pct != null && p.cur_pct > 0) ? "+" : "";
+    right = p.cur_price != null
+      ? `現在 ${num(p.cur_price, 2)}（${s}${p.cur_pct}%）`
+      : "現在値なし";
+  }
+  const cap = `<div class="spark-cap"><span class="c1">◆ ${p.made_on} ${num(p.base_price, 2)} で${dirJa}</span>`
+    + `<span class="c2" style="color:${endColor}">→ ${right}</span></div>`;
+  return `<span class="spark-pop">
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="none" class="spark-svg">
+      <line x1="${PAD}" y1="${yBase.toFixed(1)}" x2="${(W - PAD)}" y2="${yBase.toFixed(1)}" class="spark-base"/>
+      <line x1="${xPred.toFixed(1)}" y1="${PAD}" x2="${xPred.toFixed(1)}" y2="${H - PAD}" class="spark-guide"/>
+      <polyline points="${pts}" fill="none" class="spark-line"/>
+      <rect x="${(xPred - 4).toFixed(1)}" y="${(yBase - 4).toFixed(1)}" width="8" height="8" transform="rotate(45 ${xPred.toFixed(1)} ${yBase.toFixed(1)})" fill="${predColor}" stroke="#fff" stroke-width="1"/>
+      <circle cx="${xEnd.toFixed(1)}" cy="${yEnd.toFixed(1)}" r="3.5" fill="${endColor}" stroke="#fff" stroke-width="1"/>
+    </svg>${cap}</span>`;
 }
 function predRow(p, bet) {
   const dir = p.direction === "up" ? '<span class="up">上</span>' : '<span class="down">下</span>';
@@ -899,7 +982,7 @@ function predRow(p, bet) {
   }
   return `<tr>
     <td style="text-align:left">${p.made_on}</td>
-    <td>${p.name || p.ticker}<span class="tk">${p.ticker}</span></td>
+    <td style="text-align:left"><span class="spark-cell${p.sparkHtml ? " has-spark" : ""}">${p.name || p.ticker}<span class="tk">${p.ticker}</span>${p.sparkHtml || ""}</span></td>
     <td>${dir}</td>
     <td>${p.probability == null ? "-" : p.probability.toFixed(0) + "%"}</td>
     <td>${p.source}</td>
