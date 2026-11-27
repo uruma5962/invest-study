@@ -1017,9 +1017,12 @@ function saveAiList(a) { try { localStorage.setItem(AILIST_KEY, JSON.stringify(a
 function aiListHas(t) { return loadAiList().includes(t); }
 function aiAddToggle(ticker) {
   let a = loadAiList();
-  if (a.includes(ticker)) a = a.filter((x) => x !== ticker);
-  else { if (a.length >= 12) { toast("AI相談リストは最大12銘柄です", true); return; } a.push(ticker); }
+  let added;
+  if (a.includes(ticker)) { a = a.filter((x) => x !== ticker); added = false; }
+  else { if (a.length >= 12) { toast("AI相談リストは最大12銘柄です", true); return; } a.push(ticker); added = true; }
   saveAiList(a); renderAiList(); renderMAiAdd(ticker);
+  if (added) toast(`${ticker} をAI相談リストに追加しました（${a.length}件）・AI分析タブの「AI相談リスト」で確認`);
+  else toast(`${ticker} をAI相談リストから外しました`);
 }
 function renderMAiAdd(ticker) {
   const box = el("mAiAdd"); if (!box) return;
@@ -1030,8 +1033,10 @@ function renderMAiAdd(ticker) {
 function renderAiList() {
   const box = el("aiListChips"); if (!box) return;
   const a = loadAiList();
+  const cnt = el("aiListCount");
+  if (cnt) { cnt.textContent = a.length ? `${a.length}件` : ""; cnt.style.display = a.length ? "" : "none"; }
   box.innerHTML = a.length
-    ? a.map((t) => `<button class="rchip" data-ailist="${t}" title="クリックで外す">${t} <b>×</b></button>`).join("")
+    ? a.map((t) => `<button class="rchip ailist-chip" data-ailist="${t}" title="クリックで外す">${t} <b>×</b></button>`).join("")
     : '<span class="note">まだありません。銘柄詳細を開いて「AI相談リストに追加」で集めます。</span>';
   box.querySelectorAll("[data-ailist]").forEach((b) => { b.onclick = () => aiAddToggle(b.dataset.ailist); });
 }
