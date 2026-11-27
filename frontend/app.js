@@ -1128,6 +1128,32 @@ async function copyAiBundle() {
 }
 if (el("btnAiCopy")) el("btnAiCopy").onclick = copyAiBundle;
 if (el("btnAiClear")) el("btnAiClear").onclick = () => { saveAiList([]); renderAiList(); };
+// 上向きサインの銘柄を自動で集める（指標ベースの参考。全銘柄を走査するので少し時間がかかる）
+async function fillUpSignals() {
+  const btn = el("btnAiFillUp");
+  if (btn) { btn.disabled = true; btn.textContent = "探しています…（全銘柄を確認中）"; }
+  try {
+    const hz = (el("mlHorizon") && Number(el("mlHorizon").value)) || 5;
+    const data = await api("/api/analysis?horizon=" + hz);
+    const snaps = (data && data.snapshots) || [];
+    // 上向きサインの銘柄を、参考確率の高い順（同率ならMLの上昇確率）で
+    const up = snaps
+      .filter((s) => s.signal_dir === "up" && s.signal_prob != null)
+      .sort((a, b) => (b.signal_prob - a.signal_prob) || ((b.ml_prob || 0) - (a.ml_prob || 0)));
+    let list = loadAiList(), added = 0;
+    for (const s of up) {
+      if (list.length >= 12) break;
+      if (!list.includes(s.ticker)) { list.push(s.ticker); added++; }
+    }
+    saveAiList(list); renderAiList();
+    if (modalTicker) renderMAiAdd(modalTicker);
+    if (!up.length) toast("いまは上向きサインの銘柄が見つかりませんでした");
+    else if (added === 0) toast(`上向きサインは${up.length}件ありますが、リストは満杯（最大12）です`, true);
+    else toast(`上向きサインの銘柄を${added}件追加しました（候補は${up.length}件）`);
+  } catch (e) { toast(e.message || "取得に失敗しました", true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = "⤴ 上向きサインの銘柄を自動で集める"; } }
+}
+if (el("btnAiFillUp")) el("btnAiFillUp").onclick = fillUpSignals;
 renderAiList();
 
 // ---- モーダル（銘柄詳細） ----

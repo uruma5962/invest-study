@@ -12,12 +12,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=20261126f" />
+  <link rel="stylesheet" href="styles.css?v=20261127a" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js" defer></script>
-  <script src="about.js?v=20261126f" defer></script>
-  <script src="app.js?v=20261126f" defer></script>
+  <script src="about.js?v=20261127a" defer></script>
+  <script src="app.js?v=20261127a" defer></script>
 </head>
 <body>
   <header>
@@ -215,7 +215,11 @@
       <div class="panel" id="aiBundlePanel">
         <h2 style="margin-top:0">AI相談リスト <span class="note">（気になる銘柄を集めて、まとめてコピー→AIに貼る）</span></h2>
         <div class="note" style="margin:0 0 8px">銘柄の詳細を開いて<b>「AI相談リストに追加」</b>で集め、ここで<b>まとめてコピー</b>。そのテキストをAI（このClaude）に貼ると、ニュースや副次的な要因をふまえた解説が返ります。※ アプリは<b>事実だけ</b>を出し、解釈はAIがします（でっち上げを防ぐため）。</div>
-        <div id="aiListChips" class="recent" style="margin-top:0"></div>
+        <div class="up-collect">
+          <button id="btnAiFillUp" class="ghost">⤴ 上向きサインの銘柄を自動で集める</button>
+          <span class="note">テクニカルで<b>上向きサイン</b>が出ている銘柄を上位から追加します（指標ベースの参考・断定ではありません）。</span>
+        </div>
+        <div id="aiListChips" class="recent" style="margin-top:12px"></div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px">
           <button id="btnAiCopy">まとめてコピー</button>
           <button id="btnAiClear" class="ghost">クリア</button>

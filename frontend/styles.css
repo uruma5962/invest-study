@@ -456,3 +456,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .spark-cap { margin-top: 7px; display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; line-height: 1.5; }
 .spark-cap .c1 { color: var(--text); }
 .spark-cap .c2 { font-weight: 600; }
+
+/* AI相談リスト：上向きサインの一括追加 */
+.up-collect { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 2px 0 0; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--panel2); }
+.up-collect .note { flex: 1 1 220px; }
